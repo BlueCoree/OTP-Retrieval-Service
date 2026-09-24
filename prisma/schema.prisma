@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model OtpEmail {
+  id           Int      @id @default(autoincrement())
+  senderEmail  String   @map("sender_email")
+  emailSubject String   @map("email_subject")
+  emailBody    String   @map("email_body")
+  emailSentAt  DateTime @map("email_sent_at")
+  otpCode      String   @map("otp_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([senderEmail, emailSentAt])
+  @@map("otp_emails")
+}
