@@ -66,9 +66,20 @@ export class BrowserService implements OnModuleInit {
                     this.logger.log(`Filtering emails by sender: ${targetSender}`);
                     const searchBox = await page.waitForSelector('input[aria-label="Search mail"]');
                     if (searchBox) {
+                        await searchBox.evaluate(el => (el as HTMLInputElement).value = '');
                         await searchBox.type(`from:${targetSender}`);
                         await page.keyboard.press('Enter');
-                        await page.waitForNetworkIdle();
+
+                        await page.waitForFunction(
+                            (sender) => {
+                                const spans = document.querySelectorAll('span[email]');
+                                return Array.from(spans).some(span => span.getAttribute('email') === sender);
+                            },
+                            { timeout: 15000 },
+                            targetSender
+                        ).catch(() => {
+                            throw new Error(`NO_EMAIL_FOUND: No matching email found from sender ${targetSender} within timeout.`)
+                        });
                     }
                 }
 
@@ -78,7 +89,21 @@ export class BrowserService implements OnModuleInit {
                 }
 
                 this.logger.log('Opening the lates email..');
-                await emailRows[0].click();
+
+                const isClicked = await page.evaluate(() => {
+                    const rows = document.querySelectorAll('table[role="grid"] tbody tr');
+                    for (const row of Array.from(rows)) {
+                        if (row.querySelectorAll('td').length > 3) {
+                            (row as HTMLElement).click();
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+
+                if (!isClicked) {
+                    throw new Error('NO_CLICKABLE_EMAIL: Matching email row found it could not be clicked.');
+                }
 
                 await page.waitForSelector('h2[data-thread-perm-id]', { timeout: 10000 });
 

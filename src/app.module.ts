@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
 import { OtpsModule } from './otps/otps.module';
-import { BrowserService } from './browser/browser.service';
-import { BrowserModule } from './browser/browser.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [OtpsModule, BrowserModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    OtpsModule],
   controllers: [],
   providers: [],
 })
