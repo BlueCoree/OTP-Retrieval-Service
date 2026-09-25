@@ -3,12 +3,15 @@ import { OtpsService } from './otps.service';
 
 @Controller('otps')
 export class OtpsController {
-    constructor(private readonly otpService: OtpsService) {}
+    constructor(private readonly otpService: OtpsService) { }
 
     @Post('fetch')
     @HttpCode(201)
-    async fetchOtp(@Body('sender') sender?: string) {
-        return await this.otpService.fetchAndStoreOtp(sender);
+    async fetchOtp(
+        @Body('sender') sender?: string,
+        @Body('profile') profile?: string,
+    ) {
+        return await this.otpService.fetchAndStoreOtp(sender, profile);
     }
 
     @Get()

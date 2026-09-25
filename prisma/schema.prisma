@@ -14,6 +14,7 @@ model OtpEmail {
   emailBody    String   @map("email_body")
   emailSentAt  DateTime @map("email_sent_at")
   otpCode      String   @map("otp_code")
+  inboxAcc     String   @default("default") @map("inbox_acc")
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@unique([senderEmail, emailSentAt])

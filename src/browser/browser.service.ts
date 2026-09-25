@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import puppeteer, { type Browser } from 'puppeteer-core';
 import { mapPrefixedErrorToHttpException } from '../common/exceptions/prefixed-error.mapper';
+import * as path from 'path';
 
 export interface ExtractedOtp {
     senderEmail: string;
@@ -9,6 +10,7 @@ export interface ExtractedOtp {
     emailBody: string;
     emailSentAt: Date;
     otpCode: string;
+    inboxAcc: string;
 }
 
 @Injectable()
@@ -29,17 +31,19 @@ export class BrowserService implements OnModuleInit {
         }
     }
 
-    async fetchLatestOtp(targetSender?: string): Promise<ExtractedOtp> {
+    async fetchLatestOtp(targetSender?: string, profileName: string = 'default'): Promise<ExtractedOtp> {
         let browser: Browser | undefined;
 
         try {
-            this.logger.log('Launching Chrome Portable...')
+            this.logger.log(`Launching Chrome Portable with profile: ${profileName}...`);
+
+            const dynamicUserDataDir = path.join(this.userDataDir, profileName);
 
             browser = await puppeteer.launch({
                 executablePath: this.executablePath,
                 headless: false,
                 args: [
-                    `--user-data-dir=${this.userDataDir}`,
+                    `--user-data-dir=${dynamicUserDataDir}`,
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
@@ -150,7 +154,8 @@ export class BrowserService implements OnModuleInit {
                 emailSubject,
                 emailBody,
                 emailSentAt,
-                otpCode
+                otpCode,
+                inboxAcc: profileName,
             };
         } catch (error: unknown) {
             if (error instanceof Error) {

@@ -20,14 +20,15 @@ export class OtpsService {
         private readonly browserService: BrowserService,
     ) { }
 
-    async fetchAndStoreOtp(targetSender?: string) {
+    async fetchAndStoreOtp(targetSender?: string, profile?: string) {
         return await this.mutex.runExclusive(async () => {
             try {
-                const extractedOtp = await this.browserService.fetchLatestOtp(targetSender);
+                const extractedOtp = await this.browserService.fetchLatestOtp(targetSender, profile);
 
                 const existingOtp = await this.prisma.otpEmail.findFirst({
                     where: {
                         senderEmail: extractedOtp.senderEmail,
+                        inboxAcc: extractedOtp.inboxAcc,
                     },
                     orderBy: {
                         createdAt: 'desc',
@@ -45,6 +46,7 @@ export class OtpsService {
                         emailSubject: extractedOtp.emailSubject,
                         emailBody: extractedOtp.emailBody,
                         emailSentAt: extractedOtp.emailSentAt,
+                        inboxAcc: extractedOtp.inboxAcc,
                         otpCode: extractedOtp.otpCode,
                     }
                 });
