@@ -1,98 +1,319 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# OTP Retrieval Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This project is a NestJS + TypeScript backend for retrieving the latest OTP email from a Gmail inbox that is already signed in through a portable Chrome profile, extracting the verification code, storing it in PostgreSQL, and exposing the data through REST endpoints.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The service is designed for the challenge described in the repository task and strictly follows the required workflow:
+- Uses Chrome Portable rather than the bundled Chromium.
+- Reuses an authenticated Gmail session from a browser profile (no automatic login).
+- Extracts OTPs from the latest matching email and stores results in a database.
+- Exposes read/delete operations via REST.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Implemented Scope
+ 
+**Required:** all four endpoints, PostgreSQL schema via Prisma migrations, duplicate prevention, concurrency control, session-expiry detection, timeouts and browser cleanup.
+ 
+**Bonus items**
+ 
+| Bonus item | Status | Details |
+|---|---|---|
+| Multiple profiles | Implemented | `POST /otps/fetch` accepts a `profile` parameter. Each profile is a separate Chrome Portable user data directory with its own Gmail account, and each row records its inbox in `inboxAcc`. |
+| Second provider (Outlook) | Not implemented | Only Gmail is supported. Provider-specific logic is not yet behind a common interface. |
+| Tests | Partial | Unit tests for `OtpsService` (new OTP stored, duplicate rejected) and e2e tests for all four endpoints. No dedicated unit tests for the OTP extraction regex yet. |
+| Docker Compose for the database | Implemented | `docker compose up -d` starts PostgreSQL with the credentials from `.env`. |
+| Structured logging | Implemented | JSON logs via `nestjs-pino`. OTP codes and email bodies are not logged. |
+| `/health` endpoint | Implemented | Built with `@nestjs/terminus`. Checks database connectivity only, not Chrome or the Gmail session. |
 
-## Project setup
 
-```bash
-$ npm install
+---
+
+## Tech Stack
+ 
+- Node.js + TypeScript (strict mode)
+- NestJS
+- Prisma ORM + PostgreSQL
+- `puppeteer-core`
+- `async-mutex`
+- `nestjs-pino`, `@nestjs/terminus`
+- Jest + Supertest
+- Docker Compose (database only)
+
+
+---
+
+## Prerequisites
+ 
+- Node.js **24.9 or newer** (the version this project was developed and tested on; see the testing trade-off below)
+- npm
+- Docker Desktop (or a local PostgreSQL instance)
+- Chrome Portable
+- A **throwaway** Gmail account
+
+
+---
+
+## Chrome Portable Setup
+
+### 1. Install Chrome Portable
+Install Chrome Portable using a portable browser package (e.g., PortableApps.com).
+
+Example executable path:
+
+```text
+C:\GoogleChromePortable\App\Chrome-bin\chrome.exe
 ```
 
-## Compile and run the project
+### 2. Create a Profile & Login
+Simply open the `GoogleChromePortable.exe` launcher. This automatically creates and isolates your profile data inside the `Data\profile` folder. 
 
-```bash
-# development
-$ npm run start
+Navigate to Gmail (`mail.google.com`) and sign in to your throwaway account manually. **The app does not and will not log in automatically.** Once logged in, close the browser completely.
 
-# watch mode
-$ npm run start:dev
+### 3. Setting Up Multiple Profiles (Bonus Feature)
+To evaluate  the multiple profile functionality, you must create a secondary profile directory and authenticate a different Gmail account.
 
-# production mode
-$ npm run start:prod
+**Create the Secondary Profile:**
+Open your terminal and launch the Chrome executable directly, pointing to a new folder inside the `Data` directory (e.g., `profile2`):
+```cmd
+"C:\GoogleChromePortable\App\Chrome-bin\chrome.exe" --user-data-dir="C:\GooglePortableChrome\Data\profile2"
 ```
 
-## Run tests
+---
 
-```bash
-# unit tests
-$ npm run test
+## Environment Configuration
 
-# e2e tests
-$ npm run test:e2e
+Create an `.env` file in the project root:
 
-# test coverage
-$ npm run test:cov
+```env
+PORT=3000
+
+# Database Credentials
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-db-password
+POSTGRES_DB=otp_seakun
+DATABASE_URL="postgresql://postgres:your-db-password@localhost:5432/otp_seakun?schema=public"
+
+# Browser Configuration
+CHROME_PORTABLE_PATH="C:\PortableApps\GoogleChromePortable\App\Chrome-bin\chrome.exe"
+CHROME_USER_DATA_DIR="C:\ChromeProfiles"
 ```
 
-## Deployment
+> Keep `.env` outside version control and never commit personal Gmail credentials or browser profile data. Adjust the browser configuration to match the path on your local machine.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Database Setup & Execution
+
+The project includes both a Prisma schema definition and a migration file for the `otp_emails` table, so the database structure is versioned and reproducible.
+
+There are two supported ways to run the database:
+
+### Option A: Docker PostgreSQL (recommended for quick setup)
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker-compose up -d
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+This starts PostgreSQL with the credentials defined in your `.env` file.
 
-## Resources
+### Option B: Local PostgreSQL on your machine
 
-Check out a few resources that may come in handy when working with NestJS:
+If you prefer to use a local PostgreSQL instance instead of Docker, follow these steps:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+1. Create a new database for this project.
+2. Update the `DATABASE_URL` in your `.env` file to match your local database credentials:
 
-## Support
+```env
+DATABASE_URL="postgresql://postgres:your-db-password@localhost:5432/otp_seakun?schema=public"
+```
+3. Ensure PostgreSQL service is running, then apply the schema:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+npm install
+npx prisma generate
+npx prisma db push
+```
 
-## Stay in touch
+> If you use a local PostgreSQL server, make sure the port `5432` is open and the database/user credentials match exactly with `DATABASE_URL`.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 3. Run the Service
+
+```bash
+# Development mode
+npm run start:dev
+
+# Run Tests
+npm run test
+npm run test:e2e
+```
+
+The app listens on port 3000 by default.
+
+---
+
+## API Endpoints
+
+### `POST /otps/fetch`
+Fetch the latest OTP email from Gmail and store it in the database.
+
+**Request body (optional):**
+
+```json
+{
+  "sender": "joshuajulyus27@gmail.com",
+  "profile": "profile"
+}
+```
+
+***Response (201):***
+```json
+{
+    "id": 2,
+    "senderEmail": "joshuajulyus27@gmail.com",
+    "emailSubject": "test otp mutiple acc",
+    "emailBody": "Your verification code is 482913. It expires in 5 minutes",
+    "emailSentAt": "2026-09-28T05:41:47.589Z",
+    "otpCode": "482913",
+    "inboxAcc": "profile2",
+    "createdAt": "2026-09-28T05:41:48.109Z"
+}
+```
+
+### `GET /otps`
+List stored OTPs in newest-first order, with pagination (`?page=1&limit=10`).
+
+***Response:***
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "senderEmail": "joshuajulyus27@gmail.com",
+            "emailSubject": "test otp",
+            "emailBody": "Your verification code is 482913. It expires in 5 minutes.",
+            "emailSentAt": "2026-09-28T05:33:44.885Z",
+            "otpCode": "482913",
+            "inboxAcc": "profile",
+            "createdAt": "2026-09-28T05:33:45.890Z"
+        },
+        {
+            "id": 2,
+            "senderEmail": "joshuajulyus27@gmail.com",
+            "emailSubject": "test otp mutiple acc",
+            "emailBody": "Your verification code is 482913. It expires in 5 minutes",
+            "emailSentAt": "2026-09-28T05:41:47.589Z",
+            "otpCode": "482913",
+            "inboxAcc": "profile2",
+            "createdAt": "2026-09-28T05:41:48.109Z"
+        }
+    ],
+    "meta": {
+        "total": 2,
+        "page": 1,
+        "limit": 5,
+        "totalPages": 1
+    }
+}
+```
+
+### `GET /otps/:id`
+Retrieve a specific OTP record by ID. Returns `404` if not found.
+
+***Response:***
+```json
+{
+    "id": 2,
+    "senderEmail": "joshuajulyus27@gmail.com",
+    "emailSubject": "test otp mutiple acc",
+    "emailBody": "Your verification code is 482913. It expires in 5 minutes",
+    "emailSentAt": "2026-09-28T05:41:47.589Z",
+    "otpCode": "482913",
+    "inboxAcc": "profile2",
+    "createdAt": "2026-09-28T05:41:48.109Z"
+}
+```
+
+### `DELETE /otps/:id`
+Delete one OTP record by ID. Returns `404` if not found.
+
+***Response:***
+```json
+{
+    "message": "OTP with ID 2 has been deleted."
+}
+```
+
+### `GET /health`
+Returns the application and database health status.
+
+***Response:***
+```json
+{
+    "status": "ok",
+    "info": {
+        "database": {
+            "responseTime": 163,
+            "status": "up"
+        }
+    },
+    "error": {},
+    "details": {
+        "database": {
+            "responseTime": 163,
+            "status": "up"
+        }
+    }
+}
+```
+
+---
+
+## How OTP Extraction Works & Limitations
+
+The service opens Gmail in the configured browser profile and reads the contents of the newest relevant email. It identifies a numeric OTP from the body text using a regex pattern such as:
+
+```ts
+/\b\d{4,8}\b/
+```
+
+**Limitations:**
+
+- **DOM Sensitivity:** The extraction relies heavily on Gmail's current CSS selectors and DOM structure. If Google updates the Gmail UI, the Puppeteer selectors will break and require maintenance.
+- **Session Expiry:** If the Gmail session expires or encounters a security checkpoint, the bot detects it and returns a meaningful error without attempting to re-authenticate.
+- **Extraction Rules:** Currently optimized for plain-text numeric codes. OTPs formatted with alphabetical characters, dashes, or complex HTML layouts may require regex adjustments.
+
+---
+
+## Assumptions and Trade-Offs
+
+- **Testing Environment (Jest vs. ESM):** Modern dependencies like `@nestjs/config` and `puppeteer-core` utilize pure ES Modules, conflicting with Jest's legacy CommonJS runtime. Rather than downgrading libraries, a trade-off was made to configure `transformIgnorePatterns` within `jest-e2e.json` to instruct the test runner to explicitly transpile these specific `node_modules`.
+- **Deduplication Logic:** The system assumes that an identical `otpCode` from the same sender might still be a valid new request (e.g., a user clicking "Resend OTP"). Therefore, deduplication strictly validates the exact `emailBody` equality rather than just the otp code.
+- **Language Locale:** The Puppeteer traversal logic assumes the target Gmail interface is rendered in English.
+
+---
+
+## Example Workflow
+
+1. Install Chrome Portable and sign in manually to the Gmail account.
+2. Send a dummy OTP email with content such as: `Your verification code is 482913.`
+3. Start the database and app.
+4. Call `POST /otps/fetch` with the sender and profile name.
+5. Verify the row is inserted into PostgreSQL.
+6. Use `GET /otps`, `GET /otps/:id`, and `DELETE /otps/:id` to validate the API lifecycle.
+
+Example fetch request:
+
+```bash
+curl --location 'http://localhost:3000/otps/fetch' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "sender": "joshuajulyus27@gmail.com",
+  "profile": "profile"
+}'
+```
+
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is intended for evaluation and educational use within the coding challenge context.
