@@ -20,7 +20,7 @@ The service is designed for the challenge described in the repository task and s
 |---|---|---|
 | Multiple profiles | Implemented | `POST /otps/fetch` accepts a `profile` parameter. Each profile is a separate Chrome Portable user data directory with its own Gmail account, and each row records its inbox in `inboxAcc`. |
 | Second provider (Outlook) | Not implemented | Only Gmail is supported. Provider-specific logic is not yet behind a common interface. |
-| Tests | Partial | Unit tests for `OtpsService` (new OTP stored, duplicate rejected) and e2e tests for all four endpoints. No dedicated unit tests for the OTP extraction regex yet. |
+| Tests | Implement | Unit tests for OTP extraction (extract-otp.spec.ts), unit tests for OtpsService (new OTP stored, duplicate rejected), and e2e tests for all four endpoints. |
 | Docker Compose for the database | Implemented | `docker compose up -d` starts PostgreSQL with the credentials from `.env`. |
 | Structured logging | Implemented | JSON logs via `nestjs-pino`. OTP codes and email bodies are not logged. |
 | `/health` endpoint | Implemented | Built with `@nestjs/terminus`. Checks database connectivity only, not Chrome or the Gmail session. |
