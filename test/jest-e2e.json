@@ -22,6 +22,6 @@
     ]
   },
   "transformIgnorePatterns": [
-    "/node_modules/(?!(@nestjs|puppeteer-core)/)"
+    "/node_modules/(?!(?:@nestjs/terminus|@nestjs|puppeteer-core)/)"
   ]
 }

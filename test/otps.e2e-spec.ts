@@ -6,8 +6,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { describe, beforeAll, afterAll, it, expect, jest } from '@jest/globals';
-import { AppModule } from './../src/app.module';
+import { OtpsModule } from './../src/otps/otps.module';
 import { BrowserService } from './../src/browser/browser.service';
+import { PrismaService } from './../src/prisma.service';
 
 describe('OtpsController (e2e)', () => {
   let app: INestApplication;
@@ -23,11 +24,37 @@ describe('OtpsController (e2e)', () => {
   };
 
   beforeAll(async () => {
+    const otpStore = new Map<number, any>();
+
+    const prismaMock = {
+      otpEmail: {
+        findFirst: jest.fn(async () => null),
+        create: jest.fn(async ({ data }: { data: any }) => {
+          const id = (otpStore.size + 1) || 1;
+          const record = { id, ...data, createdAt: new Date() };
+          otpStore.set(id, record);
+          return record;
+        }),
+        findMany: jest.fn(async () => Array.from(otpStore.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())),
+        count: jest.fn(async () => otpStore.size),
+        findUnique: jest.fn(async ({ where }) => otpStore.get(where.id) ?? null),
+        delete: jest.fn(async ({ where }) => {
+          const deleted = otpStore.get(where.id);
+          otpStore.delete(where.id);
+          return deleted;
+        }),
+      },
+      $connect: jest.fn(),
+      $disconnect: jest.fn(),
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [OtpsModule],
     })
       .overrideProvider(BrowserService)
       .useValue(browserService)
+      .overrideProvider(PrismaService)
+      .useValue(prismaMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
