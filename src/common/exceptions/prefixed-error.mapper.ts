@@ -20,6 +20,7 @@ export function mapPrefixedErrorToHttpException(message: string): HttpException 
         case 'NO_OTP_FOUND':
         case 'EMAIL_BODY_EMPTY':
         case 'NO_CLICKABLE_EMAIL':
+        case 'EMAIL_DATE_UNREADABLE':
             return new UnprocessableEntityException(errorMessage);
         case 'DUPLICATE_EMAIL':
             return new ConflictException(errorMessage);

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import puppeteer, { type Browser } from 'puppeteer-core';
 import { mapPrefixedErrorToHttpException } from '../common/exceptions/prefixed-error.mapper';
 import * as path from 'path';
+import { extractOtps } from './extract-otp';
 
 export interface ExtractedOtp {
     senderEmail: string;
@@ -121,14 +122,19 @@ export class BrowserService implements OnModuleInit {
                 ? await page.evaluate(el => el.getAttribute('email') || '', senderElement)
                 : '';
 
-            const timeElement = await page.$('span[data-tooltip]');
-            let emailSentAt = new Date();
-            if (timeElement) {
-                const rawTimeString = await page.evaluate(el => el.getAttribute('data-tooltip') || el.textContent || '', timeElement);
-                const parsedData = new Date(rawTimeString);
-                if (!isNaN(parsedData.getTime())) {
-                    emailSentAt = parsedData;
-                }
+            let rawTimeString = '';
+            try {
+                const timeElement = await page.waitForSelector('span.g3[title]', { timeout: 10000 });
+                rawTimeString = timeElement
+                    ? await page.evaluate(el => el.getAttribute('title') || '', timeElement)
+                    : '';
+            } catch {
+                throw new Error('EMAIL_DATE_UNREADABLE: Could not find the sent-time element.');
+            }
+
+            const emailSentAt = new Date(rawTimeString);
+            if (isNaN(emailSentAt.getTime())) {
+                throw new Error(`EMAIL_DATE_UNREADABLE: Could not parse sent time "${rawTimeString}".`);
             }
 
             const bodyElement = await page.$('div[role="listitem"] div[dir="ltr"]');
@@ -140,14 +146,12 @@ export class BrowserService implements OnModuleInit {
                 throw new Error('EMAIL_BODY_EMPTY: Could not read email body.');
             }
 
-            const otpMatch = emailBody.match(/\b\d{4,8}\b/);
-            if (!otpMatch) {
+            const otpCode = extractOtps(emailBody);
+            if (!otpCode) {
                 throw new Error('NO_OTP_FOUND: Email found but no OTP code in body.');
             }
 
-            const otpCode = otpMatch[0];
-
-            this.logger.log(`OTP extracted successfully: ${otpCode}`);
+            this.logger.log(`OTP extracted successfully for profile ${profileName}`);
 
             return {
                 senderEmail,

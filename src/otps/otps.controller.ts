@@ -9,7 +9,7 @@ export class OtpsController {
     @HttpCode(201)
     async fetchOtp(
         @Body('sender') sender?: string,
-        @Body('profile') profile?: string,
+        @Body('profile') profile: string = 'profile',
     ) {
         return await this.otpService.fetchAndStoreOtp(sender, profile);
     }
