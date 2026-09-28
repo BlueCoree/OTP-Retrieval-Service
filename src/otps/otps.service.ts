@@ -73,7 +73,7 @@ export class OtpsService {
             this.prisma.otpEmail.findMany({
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'asc' },
             }),
             this.prisma.otpEmail.count(),
         ]);
