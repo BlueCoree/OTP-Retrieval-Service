@@ -29,15 +29,16 @@ export class OtpsService {
                     where: {
                         senderEmail: extractedOtp.senderEmail,
                         inboxAcc: extractedOtp.inboxAcc,
+                        emailSentAt: extractedOtp.emailSentAt,
                     },
                     orderBy: {
                         createdAt: 'desc',
                     },
                 });
 
-                if (existingOtp && existingOtp.emailBody === extractedOtp.emailBody) {
+                if (existingOtp) {
                     this.logger.warn('Email already processed.');
-                    throw new ConflictException('DUPLICATE_EMAIL: The latest OTP from this sender has already been stored.');
+                    throw new ConflictException('DUPLICATE_EMAIL: This OTP email has already been stored for this inbox.');
                 }
 
                 const newOtp = await this.prisma.otpEmail.create({
@@ -73,7 +74,7 @@ export class OtpsService {
             this.prisma.otpEmail.findMany({
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'asc' },
+                orderBy: { createdAt: 'desc' },
             }),
             this.prisma.otpEmail.count(),
         ]);

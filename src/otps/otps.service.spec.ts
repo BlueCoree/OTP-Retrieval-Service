@@ -35,6 +35,8 @@ describe('OtpsService', () => {
             otpEmail: {
               findFirst: jest.fn(),
               create: jest.fn(),
+              findMany: jest.fn(),
+              count: jest.fn(),
             },
           },
         },
@@ -70,5 +72,20 @@ describe('OtpsService', () => {
 
     await expect(service.fetchAndStoreOtp("test@example.com", "profile"))
       .rejects.toThrow(ConflictException);
-  })
+  });
+
+  it('should return OTPs ordered newest first', async () => {
+    const older = { id: 1, ...mockExtractedOtp, emailSentAt: new Date('2024-01-01T00:00:00Z'), createdAt: new Date('2024-01-01T00:00:00Z') } as any;
+    const newer = { id: 2, ...mockExtractedOtp, emailSentAt: new Date('2024-01-02T00:00:00Z'), createdAt: new Date('2024-01-02T00:00:00Z') } as any;
+
+    jest.spyOn(prismaService.otpEmail, 'findMany').mockResolvedValue([newer, older] as any);
+    jest.spyOn(prismaService.otpEmail, 'count').mockResolvedValue(2);
+
+    const result = await service.getOtps(1, 10);
+
+    expect(prismaService.otpEmail.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: { createdAt: 'desc' },
+    }));
+    expect(result.data[0].id).toBe(2);
+  });
 });
